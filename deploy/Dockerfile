@@ -15,14 +15,14 @@ RUN apt-get update && apt-get install -y \
 # Initialize git-lfs
 RUN git lfs install
 
-# Clone repositories
+# Clone heavy model repository first
+RUN git clone https://huggingface.co/microsoft/OmniParser weights/
+
+# Clone and organize OmniParser repository
 RUN git clone https://github.com/dat-lequoc/OmniParser.git && \
     cd OmniParser && \
-    mkdir -p weights && \
-    git clone https://huggingface.co/microsoft/OmniParser && \
-    mv OmniParser/* weights/ && \
-    mv weights ../ && \
     mv utils.py ../ && \
+    mv util ../ && \
     mv requirements.txt ../ && \
     cd .. && \
     rm -rf OmniParser
