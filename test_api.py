@@ -2,21 +2,60 @@ import requests
 import base64
 import json
 import os
+import time
 from typing import Dict, Any, Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 class OmniParserClient:
-    def __init__(self, api_key: str, endpoint_url: str = "https://api.runpod.ai/v2/42883k4i91accs/run"):
+    def __init__(self, api_key: str, endpoint_url: str = "https://api.runpod.ai/v2/hhgy01fbu75w7r", timeout: int = 90):
         """Initialize the OmniParser client
         
         Args:
             api_key (str): RunPod API key for authentication
             endpoint_url (str): The URL of the RunPod endpoint
+            timeout (int): Total timeout in seconds (default: 90)
         """
         self.endpoint_url = endpoint_url
+        self.timeout = timeout
         self.headers = {
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {api_key}'
         }
+
+    def _poll_for_result(self, job_id: str, interval: int = 2) -> Dict[str, Any]:
+        """Poll for job results
+        
+        Args:
+            job_id (str): The ID of the job to poll for
+            interval (int): Polling interval in seconds
+            
+        Returns:
+            Dict containing the results or error
+        """
+        endpoint = f"{self.endpoint_url}/status/{job_id}"
+        start_time = time.time()
+        
+        while True:
+            if time.time() - start_time > self.timeout:
+                return {"status": "error", "error": f"Request timed out after {self.timeout} seconds"}
+            
+            try:
+                response = requests.get(endpoint, headers=self.headers)
+                response.raise_for_status()
+                status_data = response.json()
+                
+                if status_data["status"] == "COMPLETED":
+                    return {"status": "success", "data": status_data["output"]}
+                elif status_data["status"] == "FAILED":
+                    return {"status": "error", "error": status_data.get("error", "Job failed")}
+                
+                time.sleep(interval)
+                
+            except requests.exceptions.RequestException as e:
+                return {"status": "error", "error": str(e)}
 
     def parse_image(self, image_path: str) -> Dict[str, Any]:
         """Send an image to the OmniParser service for parsing
@@ -37,16 +76,23 @@ class OmniParserClient:
                 "image": base64_image
             }
         }
-        
-        # Send POST request
+
         try:
+            # Submit the job
             response = requests.post(
-                self.endpoint_url,
+                f"{self.endpoint_url}/run",
                 json=payload,
                 headers=self.headers
             )
             response.raise_for_status()
-            return response.json()
+            job_data = response.json()
+            
+            if "id" not in job_data:
+                return {"status": "error", "error": "No job ID in response"}
+            
+            # Poll for results
+            return self._poll_for_result(job_data["id"])
+            
         except requests.exceptions.RequestException as e:
             return {"status": "error", "error": str(e)}
 

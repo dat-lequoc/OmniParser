@@ -20,3 +20,4 @@ ipykernel
 Pillow
 nvidia-pyindex
 nvidia-cuda-runtime-cu12
+python-dotenv==1.0.1
